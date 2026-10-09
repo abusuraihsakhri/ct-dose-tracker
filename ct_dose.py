@@ -5,6 +5,7 @@ Tracks CTDIvol, DLP and effective dose per scan, flags ACR Pass/Fail and cumulat
 Stdlib only.
 """
 import argparse, csv, sys, math
+from dose_metrics import calculate_ct_dose, summarize_dose_exams
 
 
 def _safe_float(val, default=0.0):
@@ -103,6 +104,13 @@ def calculate_score(**kwargs):
 
 def assess_row(row):
     try:
+        if any(key in row for key in ("ctdi_vol_mgy", "scan_length_cm", "dlp_mgy_cm", "k_msv_per_mgy_cm")):
+            return calculate_ct_dose(
+                row.get("ctdi_vol_mgy"),
+                row.get("scan_length_cm"),
+                row.get("dlp_mgy_cm"),
+                row.get("k_msv_per_mgy_cm"),
+            )
         # try common lab keys
         if "bilirubin" in row and "creatinine" in row:
             return calculate_meld_na(row.get("bilirubin"), row.get("creatinine"), row.get("inr"), row.get("sodium"), row.get("dialysis","0")=="1", row.get("albumin"), row.get("sex","M"))
@@ -139,7 +147,11 @@ def process_csv(inp, out):
     inp_path = _validate_path(inp, must_exist=True)
     out_path = _validate_path(out)
     with open(inp_path, newline="", encoding="utf-8-sig") as f:
-        r = csv.DictReader(f); rows=list(r); fieldnames=r.fieldnames
+        r = csv.DictReader(f)
+        rows = list(r)
+        fieldnames = r.fieldnames
+    if not fieldnames:
+        raise ValueError("CSV must contain a header row")
     results=[]
     for row in rows:
         res = assess_row(row)
@@ -149,7 +161,7 @@ def process_csv(inp, out):
     all_keys=set()
     for rr in results: all_keys.update(rr.keys())
     # keep original first
-    extra = [k for k in all_keys if k not in fieldnames]
+    extra = sorted(k for k in all_keys if k not in fieldnames)
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w=csv.DictWriter(f, fieldnames=list(fieldnames)+extra); w.writeheader(); w.writerows(results)
     return results
@@ -161,6 +173,10 @@ def build_parser():
     s.add_argument("--json", help='JSON of inputs e.g. bil')
     s.add_argument("--bili", type=float); s.add_argument("--creat", type=float); s.add_argument("--inr", type=float); s.add_argument("--na", type=float)
     s.add_argument("--qt", type=float); s.add_argument("--rr", type=float); s.add_argument("--hr", type=float)
+    s.add_argument("--ctdi-vol", type=float, help="CTDIvol in mGy")
+    s.add_argument("--scan-length", type=float, help="Scan length in cm")
+    s.add_argument("--dlp", type=float, help="Scanner-reported DLP in mGy cm")
+    s.add_argument("--k", type=float, help="DLP-to-effective-dose coefficient in mSv/(mGy cm)")
     b=sub.add_parser("batch", help="batch csv"); b.add_argument("--input", required=True); b.add_argument("--output", required=True)
     return p
 
@@ -180,6 +196,10 @@ def main(argv=None):
             if a.qt is not None: row["qt_ms"]=a.qt
             if a.rr is not None: row["rr_ms"]=a.rr
             if a.hr is not None: row["hr_bpm"]=a.hr
+            if a.ctdi_vol is not None: row["ctdi_vol_mgy"]=a.ctdi_vol
+            if a.scan_length is not None: row["scan_length_cm"]=a.scan_length
+            if a.dlp is not None: row["dlp_mgy_cm"]=a.dlp
+            if a.k is not None: row["k_msv_per_mgy_cm"]=a.k
         print(assess_row(row))
         return 0
     if a.cmd=="batch":

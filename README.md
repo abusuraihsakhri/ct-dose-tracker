@@ -1,182 +1,80 @@
 # CT Dose Tracker
 
-> **Domain:** Clinical Decision Support & Biomedical Computing
-> **Reference Guidelines & Standards:** `Standard Clinical Formulations & ISO/IEC Quality Frameworks`
+A browser and Python worksheet for computed tomography scanner-output dose metrics: **CTDIvol** (mGy), **dose–length product (DLP)** (mGy·cm), and an optional **approximate effective dose** (mSv).
 
-<div align="center">
+## Browser application
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+The root `index.html` runs without a backend or build step:
 
-</div>
+- Add examinations using scanner-reported DLP, or CTDIvol and scan length.
+- Optionally provide a DLP-to-effective-dose coefficient (`k`); no coefficient is inferred automatically.
+- View cumulative DLP and the sum of *available* effective-dose estimates, including their coverage.
+- Import CSV examination measurements and export a local CSV summary (maximum 2,000 rows and 2 MB per import).
+- Remove entries or clear the session. Data stay in the browser tab and are not automatically saved or uploaded.
 
----
-
-## 📖 What It Does
-
-CT Dose Tracker (CTDI/DLP) tracks CTDIvol, DLP and effective dose per scan, flags ACR Pass/Fail and cumulative dose. Includes clinical calculation modules for MELD-Na, QTc, BMI, HbA1c, APRI/FIB-4 scores.
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### 🔬 Clinical Calculation Functions
-
-- **`calculate_meld_na()`** — MELD-Na score for liver disease severity assessment
-- **`calculate_qtc()`** — QTc (corrected QT interval) using Bazett's formula
-- **`calculate_bmi_z()`** — BMI calculation with pediatric/adult support
-- **`convert_hba1c()`** — Convert between HbA1c (%) and estimated average glucose (mg/dL)
-- **`calculate_apri_fib4()`** — APRI and FIB-4 scores for liver fibrosis assessment
-- **`calculate_score()`** — Generic weighted scoring formula
-- **`assess_row()`** — Auto-detects input type and routes to appropriate calculator
-- **`process_csv()`** — Batch processing of CSV files with path traversal protection
-
-### 🛡️ Security & Enterprise Architecture
-
-- **Zero-PHI Outbound Interceptor:** Active regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers
-- **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation
-- **Path Traversal Protection:** File operations validated to prevent directory escape
-- **Secure Defaults:** Audit keys generated via `secrets.token_hex()` if not configured externally
-
-### 🌐 API & Telemetry
-
-- **FastAPI REST API:** OpenAPI 3.1 endpoints for audit, chat, and metrics
-- **Prometheus Metrics:** Operational metrics at `/metrics`
-- **WebSocket Telemetry:** Real-time event streaming
-
----
-
-## 💻 Installation
+To run locally:
 
 ```bash
-# Clone the repository
-git clone https://github.com/abusuraihsakhri/ct-dose-tracker.git
-cd ct-dose-tracker
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
+python -m http.server 8000
+# Open http://localhost:8000/
 ```
 
----
+The application uses vanilla JavaScript and runs directly on GitHub Pages. Python/Pyodide is **not required** for the browser worksheet.
 
-## 🚀 Usage
+CSV headers: `protocol,ctdi_vol_mgy,scan_length_cm,dlp_mgy_cm,k_msv_per_mgy_cm`. DLP, or both CTDIvol and scan length, is required for each examination. The protocol label should not contain patient identifiers.
 
-### CLI Commands
+## Interpretation and limitations
+
+- `DLP = CTDIvol × scan length` is used when DLP is not provided. The scanner-reported DLP takes precedence.
+- When an appropriate coefficient is explicitly provided, `E ≈ DLP × k` gives an **approximate population-level** effective-dose estimate, **not** individual patient absorbed dose or cancer risk.
+- Conversion coefficients depend on anatomical region, patient age, scanning technique, and reference phantom. The illustrative adult-chest example uses `k = 0.014 mSv/(mGy·cm)` from AAPM Report 96.
+- The worksheet does **not** calculate size-specific dose estimates (SSDE), determine clinical appropriateness, or issue ACR pass/fail judgments. Diagnostic reference levels are not individual patient dose limits.
+
+References: [AAPM Report 96](https://www.aapm.org/pubs/reports/detail.asp?docid=97), [AAPM Report 204](https://www.aapm.org/pubs/reports/detail.asp?docid=143).
+
+## Python calculations and CLI
+
+Python 3.10+ is supported. The CT dose module uses only the standard library; the separate legacy supervisor/API functions require packages in `requirements.txt`.
 
 ```bash
-# Run single task evaluation
-python cli.py audit --task-id TASK-001 --primary 28.5 --secondary 14.2
+python -m pip install -r requirements.txt
+python ct_dose.py single --ctdi-vol 10 --scan-length 30 --k 0.014
+python ct_dose.py single --json '{"dlp_mgy_cm": 450, "k_msv_per_mgy_cm": 0.014}'
+python ct_dose.py batch --input my_exams.csv --output results.csv
+```
 
-# Batch process CSV records
-python cli.py batch -i input.csv -o results.csv
+The new `dose_metrics.calculate_ct_dose()` function accepts CTDIvol, scan length, reported DLP and an optional conversion coefficient with explicit finite/non-negative validation; `summarize_dose_exams()` totals records.
 
-# Verify HMAC audit trail integrity
-python cli.py verify-audit
+The repository also retains its earlier *separate* MELD-Na, QTc, BMI, HbA1c and fibrosis-score calculator helpers in `ct_dose.py`, and the experimental generic task-audit supervisor in `agents/`. These are not substitutes for validated clinical decision support.
 
-# Launch FastAPI REST server
+Optional legacy FastAPI/CLI service:
+
+```bash
 python cli.py serve --host 127.0.0.1 --port 8000
+# Open http://127.0.0.1:8000/
+python cli.py audit --task-id TASK-001 --primary 28.5
+python cli.py verify-audit
 ```
 
-### Direct Clinical Calculations
+The API has a demo task-audit endpoint at `/api/audit` and a deterministic mock chat response. Neither provides a validated radiology dose-quality review. The audit log is in memory; even with a persistent `AUDIT_SECRET_KEY` the records themselves do **not** survive process restarts. The regex-based identifier guard is incomplete and must not be used as a clinical de-identification solution.
 
-```python
-import ct_dose
-
-# MELD-Na score
-result = ct_dose.calculate_meld_na(bilirubin=2.0, creatinine=1.5, inr=1.2)
-print(result)  # {'meld_na': 15.2, 'risk': 'MODERATE'}
-
-# QTc calculation
-result = ct_dose.calculate_qtc(qt_ms=400, hr_bpm=60)
-print(result)  # {'qtc_ms': 400.0, 'prolonged': False}
-
-# Auto-detect calculation type
-result = ct_dose.assess_row({'bilirubin': 2.0, 'creatinine': 1.5})
-```
-
-### Batch CSV Processing
+## Tests
 
 ```bash
-python ct_dose.py single --json '{"bilirubin": 2.0, "creatinine": 1.5}'
-python ct_dose.py batch --input sample.csv --output results.csv
+python -m pytest -q
+python -m compileall -q ct_dose.py dose_metrics.py cli.py agents tests
+node --check app.mjs
+node --test dose.test.mjs
 ```
 
----
+GitHub Actions runs Python 3.10–3.12 tests and Node tests. A separate Pages workflow publishes only the static worksheet files.
 
-## 🧪 Testing
+## Privacy and security
 
-```bash
-# Run full test suite
-pytest -v
+The browser application makes no network requests for examination data and uses no local storage. Follow the linked AAPM resources only if you wish to navigate to their sites. Do not input personal health information. CSV exports are escaped to reduce spreadsheet formula-injection risks; inspect files before importing into other tools.
 
-# Run with coverage
-pytest -v --cov=.
+For legacy server deployments, set a suitable `AUDIT_SECRET_KEY` server-side. Never put secrets in a browser app or checked-in files. The generic API is experimental and must be secured, assessed, and hosted appropriately before any production use.
 
-# Run specific test module
-pytest tests/test_ct_dose_calculations.py -v
-```
+## License
 
----
-
-## 🐳 Docker Deployment
-
-```bash
-# Build and run with Docker Compose
-docker-compose up --build
-
-# Or manually
-docker build -t ct-dose-tracker .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secret-key ct-dose-tracker
-```
-
----
-
-## 🔧 Configuration
-
-| Environment Variable | Description | Default |
-|:---------------------|:------------|:--------|
-| `AUDIT_SECRET_KEY` | HMAC-SHA256 key for audit trail signing | Random (session-scoped) |
-| `MODEL_PROVIDER` | LLM provider (`mock`, `ollama`, `claude`, `openai`) | `mock` |
-
-> **Security Note:** Always set `AUDIT_SECRET_KEY` in production to ensure audit trail persistence across restarts.
-
----
-
-## 📁 Project Structure
-
-```
-ct-dose-tracker/
-├── agents/              # Enterprise agent framework
-│   ├── base.py          # Security, PHI guard, audit trail
-│   ├── models.py        # Pydantic data models
-│   ├── supervisor.py    # Multi-agent orchestrator
-│   ├── workers.py       # Specialized domain workers
-│   ├── api.py           # FastAPI REST endpoints
-│   ├── llm_factory.py   # LLM provider factory
-│   ├── learning.py      # Bayesian calibration engine
-│   ├── metrics.py       # Prometheus metrics collector
-│   └── streamer.py      # WebSocket telemetry
-├── tests/               # Pytest test suite
-├── web/                 # Operations console (HTML)
-├── ct_dose.py           # Core clinical calculations
-├── cli.py               # Command-line interface
-├── enrichment.py        # Domain enrichment engines
-├── simulator.py         # High-throughput stress testing
-├── requirements.txt     # Python dependencies
-├── Dockerfile           # Container build
-└── docker-compose.yml   # Container orchestration
-```
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+[MIT](LICENSE).

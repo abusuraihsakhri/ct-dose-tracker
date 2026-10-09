@@ -1,40 +1,37 @@
-name: Ct Dose Tracker CI/CD & Security Verification
+name: CT Dose Tracker CI
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master, "improve/**"]
   pull_request:
-    branches: [ master, main ]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  test-and-audit:
+  test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install fastapi uvicorn pydantic pytest
-
-    - name: Run Pytest Suite
-      run: |
-        pytest -v
-
-    - name: Security SAST & Zero-PHI Audit
-      run: |
-        python -c "
-        from agents.base import PHIGuard, AuditLogger
-        import pytest
-        assert AuditLogger.verify_integrity() is True
-        print('Security & Zero-PHI Audit Passed!')
-        "
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python sources
+        run: python -m compileall -q ct_dose.py dose_metrics.py cli.py agents tests
+      - name: Test Python
+        run: python -m pytest -q
+      - name: Check JavaScript syntax
+        run: |
+          node --check dose.mjs
+          node --check app.mjs
+      - name: Test browser dose and CSV utilities
+        run: node --test dose.test.mjs
