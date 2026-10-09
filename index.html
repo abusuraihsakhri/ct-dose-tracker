@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Local CTDIvol, DLP, and optional approximate effective-dose worksheet.">
+  <title>CT Dose Tracker — CTDIvol & DLP</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1120; --panel:#152138; --border:#34435e; --text:#f0f5fc; --muted:#becadd; --accent:#60a5fa; --error:#fda4af }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif }
+    main { width:min(1100px, calc(100% - 32px)); margin:0 auto; padding:34px 0 65px }
+    h1 { margin:0 0 5px; font-size:clamp(1.7rem,3vw,2.5rem); line-height:1.2 }
+    h2 { font-size:1.17rem; margin:0 0 16px }
+    p { margin:6px 0 12px }
+    .muted,small { color:var(--muted) }
+    .lead { max-width:760px; margin-bottom:26px }
+    .kicker { text-transform:uppercase; letter-spacing:.13em; font-size:.76rem; font-weight:700; color:var(--accent) }
+    .layout { display:grid; grid-template-columns:minmax(270px, .95fr) minmax(320px, 1.4fr); gap:18px; align-items:start }
+    .panel { border:1px solid var(--border); border-radius:13px; background:var(--panel); padding:22px; margin-bottom:18px }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+    label { font-size:.89rem; font-weight:600; display:block; margin-bottom:5px }
+    .form-field { margin-bottom:13px }
+    .form-field small { display:block; margin-top:4px; font-size:.78rem }
+    input { display:block; width:100%; border:1px solid #637491; background:#0b1529; color:var(--text); border-radius:7px; padding:10px 11px; font:inherit }
+    input[type=file] { padding:10px; font-size:.82rem }
+    button { border:1px solid transparent; border-radius:7px; padding:10px 15px; font:600 .89rem/1.3 inherit; cursor:pointer }
+    button:focus-visible, input:focus-visible, a:focus-visible { outline:3px solid #fbbf24; outline-offset:2px }
+    button:disabled { opacity:.45; cursor:not-allowed }
+    .primary { color:#071426; background:#93c5fd }
+    .secondary { color:var(--text); background:#283a55; border-color:#526582 }
+    .remove { color:#fecaca; background:transparent; border-color:#8b5160; padding:6px 9px }
+    .actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:14px }
+    .metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:14px }
+    .metric { padding:14px 12px; background:#0b1529; border:1px solid var(--border); border-radius:9px }
+    .metric .number { font-size:clamp(1.1rem,2.5vw,1.6rem); font-weight:750; overflow-wrap:anywhere; font-variant-numeric:tabular-nums }
+    .metric .label { color:var(--muted); font-size:.79rem }
+    #status { min-height:1.4em; color:#bfdbfe; margin-top:12px }
+    #status.error { color:var(--error) }
+    .table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:9px }
+    table { width:100%; border-collapse:collapse; font-size:.87rem }
+    th,td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap }
+    th { background:#24344e; color:#edf3fc; font-size:.79rem }
+    td { font-variant-numeric:tabular-nums }
+    tr:last-child td { border-bottom:0 }
+    .note { background:#0e1b31; border-left:3px solid var(--accent); padding:12px 15px; border-radius:4px; font-size:.88rem; margin-top:16px }
+    a { color:#93c5fd }
+    .references { font-size:.87rem; margin-top:18px }
+    @media (max-width:800px) { .layout { grid-template-columns:1fr } .panel { padding:18px } }
+    @media (max-width:450px) { .form-grid,.metrics { grid-template-columns:1fr } main { padding-top:24px } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="kicker">Radiology · CT radiation-output worksheet</p>
+    <h1>CT Dose Tracker</h1>
+    <p class="lead muted">Record CTDIvol and dose–length product (DLP) for examinations. Calculate DLP from CTDIvol and scan length, and optionally an approximate effective dose using a specified conversion coefficient.</p>
+  </header>
+  <div class="layout">
+    <section class="panel" aria-labelledby="entry-heading">
+      <h2 id="entry-heading">Add examination</h2>
+      <form id="dose-form">
+        <div class="form-field">
+          <label for="protocol">Protocol label (no patient identifiers)</label>
+          <input id="protocol" name="protocol" maxlength="80" autocomplete="off" placeholder="e.g., CT chest" />
+        </div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="ctdi">CTDIvol (mGy)</label>
+            <input id="ctdi" name="ctdi" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g., 10">
+          </div>
+          <div class="form-field">
+            <label for="length">Scan length (cm)</label>
+            <input id="length" name="length" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="e.g., 30">
+          </div>
+        </div>
+        <div class="form-field">
+          <label for="dlp">Scanner-reported DLP (mGy·cm) — optional</label>
+          <input id="dlp" name="dlp" type="number" min="0" step="any" inputmode="decimal" placeholder="Use if available">
+          <small>When supplied, the reported DLP is used instead of CTDIvol × length.</small>
+        </div>
+        <div class="form-field">
+          <label for="k">DLP-to-effective-dose coefficient, k (mSv/[mGy·cm]) — optional</label>
+          <input id="k" name="k" type="number" min="0" step="any" inputmode="decimal" placeholder="Leave blank to omit estimate">
+          <small>Choose a coefficient appropriate to the region, age and reference phantom; see guidance below.</small>
+        </div>
+        <div class="actions">
+          <button class="primary" type="submit">Add examination</button>
+          <button class="secondary" type="button" id="example">Load example</button>
+        </div>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div class="note"><strong>Local processing.</strong> Entries and imported CSV files stay in this browser tab. They are not transmitted to a server or saved in local storage. Do not enter patient identifiers.</div>
+    </section>
+    <div>
+      <section class="panel" aria-labelledby="summary-heading">
+        <h2 id="summary-heading">Session summary</h2>
+        <div class="metrics">
+          <div class="metric"><div class="number" id="count">0</div><div class="label">Examinations</div></div>
+          <div class="metric"><div class="number" id="total-dlp">0</div><div class="label">Summed DLP (mGy·cm)</div></div>
+          <div class="metric"><div class="number" id="total-effective">—</div><div class="label">Sum of available E estimates (mSv)</div></div>
+        </div>
+        <p class="muted" id="coverage">No examinations entered</p>
+        <div class="actions">
+          <button id="download" class="primary" type="button" disabled>Export CSV</button>
+          <button id="clear" class="secondary" type="button" disabled>Clear session</button>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="records-heading">
+        <h2 id="records-heading">Examinations</h2>
+        <p class="muted" id="empty">No examinations have been added.</p>
+        <div class="table-wrap">
+          <table aria-label="CT dose examination measurements">
+            <thead><tr><th>Protocol</th><th>CTDIvol (mGy)</th><th>Length (cm)</th><th>DLP (mGy·cm)</th><th>E approx. (mSv)</th><th>Action</th></tr></thead>
+            <tbody id="exam-rows"></tbody>
+          </table>
+        </div>
+        <div class="form-field" style="margin-top:18px">
+          <label for="upload">Import CSV (2 MB / 2,000 rows maximum)</label>
+          <input type="file" id="upload" accept=".csv,text/csv">
+          <small>Headers: <code>protocol,ctdi_vol_mgy,scan_length_cm,dlp_mgy_cm,k_msv_per_mgy_cm</code>. DLP or both CTDIvol and length is required in each row.</small>
+        </div>
+      </section>
+    </div>
+  </div>
+  <section class="panel references" aria-labelledby="notes-heading">
+    <h2 id="notes-heading">Interpretation and limitations</h2>
+    <p><strong>DLP = CTDIvol × scan length</strong> when derived from a single representative acquisition. If a scanner-reported DLP is available, use that reported value. Effective dose is approximated as <strong>E ≈ DLP × k</strong> and is intended for population-level comparisons, not patient-specific radiation risk or absorbed organ dose.</p>
+    <p>The “Load example” button uses an illustrative adult chest coefficient of 0.014 mSv/(mGy·cm), not a universal factor. Coefficients vary by anatomy, age, scanner technique and phantom assumptions. This tool does not compute SSDE or determine ACR pass/fail; diagnostic reference levels are not patient dose limits.</p>
+    <p>Reference: <a href="https://www.aapm.org/pubs/reports/detail.asp?docid=97" target="_blank" rel="noopener noreferrer">AAPM Report 96 — Measurement, Reporting, and Management of Radiation Dose in CT</a>; <a href="https://www.aapm.org/pubs/ctprotocols/documents/lungcancerscreeningct.pdf" target="_blank" rel="noopener noreferrer">AAPM Lung Cancer Screening CT Protocols, v6</a>.</p>
+  </section>
+</main>
+<script type="module" src="./app.mjs"></script>
+</body>
+</html>
