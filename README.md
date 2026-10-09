@@ -1,5 +1,7 @@
 # CT Dose Tracker
 
+### [Open the Live Application →](https://abusuraihsakhri.github.io/ct-dose-tracker/)
+
 A browser and Python worksheet for computed tomography scanner-output dose metrics: **CTDIvol** (mGy), **dose–length product (DLP)** (mGy·cm), and an optional **approximate effective dose** (mSv).
 
 ## Browser application
