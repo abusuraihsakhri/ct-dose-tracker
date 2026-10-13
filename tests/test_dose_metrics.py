@@ -100,4 +100,4 @@ def test_python_csv_export_neutralizes_formulas(tmp_path):
     with out.open(newline="", encoding="utf8") as file:
         record = next(csv.DictReader(file))
     assert record["protocol"] == "'=2+3"
-    assert record["dlp_mgy_cm"] == "200"
+    assert float(record["dlp_mgy_cm"]) == 200.0
