@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile Python sources
-        run: python -m compileall -q ct_dose.py dose_metrics.py cli.py agents tests
+        run: python -m compileall -q ct_dose.py dose_metrics.py csv_safety.py cli.py agents tests
       - name: Test Python
         run: python -m pytest -q
       - name: Check JavaScript syntax

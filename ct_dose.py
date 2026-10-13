@@ -6,6 +6,7 @@ Stdlib only.
 """
 import argparse, csv, sys, math
 from dose_metrics import calculate_ct_dose, summarize_dose_exams
+from csv_safety import escape_csv_formula
 
 
 def _safe_float(val, default=0.0):
@@ -163,7 +164,10 @@ def process_csv(inp, out):
     # keep original first
     extra = sorted(k for k in all_keys if k not in fieldnames)
     with open(out_path, "w", newline="", encoding="utf-8") as f:
-        w=csv.DictWriter(f, fieldnames=list(fieldnames)+extra); w.writeheader(); w.writerows(results)
+        w=csv.DictWriter(f, fieldnames=list(fieldnames)+extra)
+        w.writeheader()
+        w.writerows({key: escape_csv_formula(value) for key, value in record.items()}
+                    for record in results)
     return results
 
 def build_parser():
@@ -185,7 +189,14 @@ def main(argv=None):
     p=build_parser(); a=p.parse_args(argv)
     if a.cmd=="single":
         if a.json:
-            row=_json.loads(a.json)
+            try:
+                row=_json.loads(a.json)
+            except _json.JSONDecodeError as exc:
+                print(f"Error: Invalid JSON input: {exc.msg}", file=sys.stderr)
+                return 2
+            if not isinstance(row, dict):
+                print("Error: JSON input must be an object", file=sys.stderr)
+                return 2
         else:
             row={k: getattr(a,k) for k in ["bili","creat","inr","na","qt","rr","hr"] if getattr(a,k,None) is not None}
             # map aliases
@@ -200,7 +211,11 @@ def main(argv=None):
             if a.scan_length is not None: row["scan_length_cm"]=a.scan_length
             if a.dlp is not None: row["dlp_mgy_cm"]=a.dlp
             if a.k is not None: row["k_msv_per_mgy_cm"]=a.k
-        print(assess_row(row))
+        result = assess_row(row)
+        if "error" in result:
+            print(f"Error: {result['error']}", file=sys.stderr)
+            return 2
+        print(result)
         return 0
     if a.cmd=="batch":
         res=process_csv(a.input, a.output); print(f"Processed {len(res)} -> {a.output}"); return 0

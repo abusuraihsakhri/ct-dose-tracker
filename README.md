@@ -12,7 +12,7 @@ The root `index.html` runs without a backend or build step:
 - Optionally provide a DLP-to-effective-dose coefficient (`k`); no coefficient is inferred automatically.
 - View cumulative DLP and the sum of *available* effective-dose estimates, including their coverage.
 - Import CSV examination measurements and export a local CSV summary (maximum 2,000 rows and 2 MB per import).
-- Remove entries or clear the session. Data stay in the browser tab and are not automatically saved or uploaded.
+- Remove entries or clear the session. Cumulative values are checked for numeric overflow; data stay in the browser tab and are not automatically saved or uploaded.
 
 To run locally:
 
@@ -45,7 +45,7 @@ python ct_dose.py single --json '{"dlp_mgy_cm": 450, "k_msv_per_mgy_cm": 0.014}'
 python ct_dose.py batch --input my_exams.csv --output results.csv
 ```
 
-The new `dose_metrics.calculate_ct_dose()` function accepts CTDIvol, scan length, reported DLP and an optional conversion coefficient with explicit finite/non-negative validation; `summarize_dose_exams()` totals records.
+`dose_metrics.calculate_ct_dose()` accepts CTDIvol, scan length, reported DLP and an optional conversion coefficient with finite/non-negative validation; `summarize_dose_exams()` totals records and rejects numeric overflow. Invalid single-CLI inputs exit with a nonzero status.
 
 The repository also retains its earlier *separate* MELD-Na, QTc, BMI, HbA1c and fibrosis-score calculator helpers in `ct_dose.py`, and the experimental generic task-audit supervisor in `agents/`. These are not substitutes for validated clinical decision support.
 
@@ -73,7 +73,7 @@ GitHub Actions runs Python 3.10–3.12 tests and Node tests. A separate Pages wo
 
 ## Privacy and security
 
-The browser application makes no network requests for examination data and uses no local storage. Follow the linked AAPM resources only if you wish to navigate to their sites. Do not input personal health information. CSV exports are escaped to reduce spreadsheet formula-injection risks; inspect files before importing into other tools.
+The browser application makes no network requests for examination data and uses no local storage. Follow the linked AAPM resources only if you wish to navigate to their sites. Do not input personal health information. Browser and Python CSV exports escape formula-like text to reduce spreadsheet injection risks; inspect files before importing into other tools.
 
 For legacy server deployments, set a suitable `AUDIT_SECRET_KEY` server-side. Never put secrets in a browser app or checked-in files. The generic API is experimental and must be secured, assessed, and hosted appropriately before any production use.
 

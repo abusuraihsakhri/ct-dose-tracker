@@ -20,6 +20,9 @@ export function calculateDose({ ctdi, length, dlp, k } = {}) {
     throw new Error('Provide reported DLP, or both CTDIvol and scan length.');
   }
   const calculatedDlp = c !== null && l !== null ? c * l : null;
+  if (calculatedDlp !== null && !Number.isFinite(calculatedDlp)) {
+    throw new Error('Calculated DLP exceeds numeric range.');
+  }
   const effectiveDlp = reported === null ? calculatedDlp : reported;
   if (!Number.isFinite(effectiveDlp)) throw new Error('Calculated DLP exceeds numeric range.');
   const effectiveMsv = coefficient === null ? null : effectiveDlp * coefficient;
@@ -37,9 +40,11 @@ export function summarize(rows) {
   return rows.reduce((totals, item) => {
     totals.count++;
     totals.dlpMgyCm += item.dose.dlpMgyCm;
+    if (!Number.isFinite(totals.dlpMgyCm)) throw new Error('Cumulative DLP exceeds numeric range.');
     if (item.dose.effectiveMsv !== null) {
       totals.effectiveKnownCount++;
       totals.effectiveMsv += item.dose.effectiveMsv;
+      if (!Number.isFinite(totals.effectiveMsv)) throw new Error('Cumulative effective-dose estimate exceeds numeric range.');
     }
     return totals;
   }, { count: 0, dlpMgyCm: 0, effectiveMsv: 0, effectiveKnownCount: 0 });

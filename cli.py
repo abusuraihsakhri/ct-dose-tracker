@@ -8,6 +8,7 @@ import sys
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
 from agents.base import AuditLogger
+from csv_safety import escape_csv_formula
 
 supervisor = SystemSupervisor(model_provider="mock")
 
@@ -125,7 +126,8 @@ def main(argv=None):
         with open(args.output, mode="w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=out_fields)
             writer.writeheader()
-            writer.writerows(out_rows)
+            writer.writerows({key: escape_csv_formula(value) for key, value in record.items()}
+                             for record in out_rows)
         print(f"Processed {len(out_rows)} records -> {args.output}")
         return 0
 
