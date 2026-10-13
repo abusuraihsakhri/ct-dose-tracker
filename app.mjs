@@ -65,7 +65,9 @@ form.addEventListener('submit', event => {
       dlp: $('dlp').value, k: $('k').value
     });
     if (rows.length >= 2000) throw new Error('Maximum of 2,000 examinations reached.');
-    rows.push({ protocol, dose });
+    const item = { protocol, dose };
+    summarize([...rows, item]); // Reject overflow before changing state.
+    rows.push(item);
     render();
     report('Examination added. No information was uploaded or stored.');
     form.reset();
@@ -119,6 +121,7 @@ $('upload').addEventListener('change', async event => {
       }
     });
     if (incoming.length + rows.length > 2000) throw new Error('Maximum of 2,000 examinations exceeded.');
+    summarize([...rows, ...incoming]); // Apply imports only after validating totals.
     rows.push(...incoming);
     render();
     report(incoming.length + ' examinations imported locally.');

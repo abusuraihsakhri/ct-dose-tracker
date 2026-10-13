@@ -48,6 +48,8 @@ def calculate_ct_dose(
             "Provide reported DLP or both CTDIvol and scan length"
         )
     calculated = ctdi * length if ctdi is not None and length is not None else None
+    if calculated is not None and not math.isfinite(calculated):
+        raise DoseInputError("Calculated DLP exceeds numeric range")
     dlp = reported if reported is not None else calculated
     if not math.isfinite(dlp):
         raise DoseInputError("Calculated DLP exceeds numeric range")
@@ -74,9 +76,13 @@ def summarize_dose_exams(exams):
     for exam in exams:
         count += 1
         total_dlp += exam["dlp_mgy_cm"]
+        if not math.isfinite(total_dlp):
+            raise DoseInputError("Cumulative DLP exceeds numeric range")
         if exam["effective_msv"] is not None:
             known += 1
             effective += exam["effective_msv"]
+            if not math.isfinite(effective):
+                raise DoseInputError("Cumulative effective-dose estimate exceeds numeric range")
     return {
         "examinations": count,
         "total_dlp_mgy_cm": total_dlp,

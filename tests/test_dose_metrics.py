@@ -74,3 +74,30 @@ def test_empty_csv_rejected(tmp_path):
     file.write_text("", encoding="utf8")
     with pytest.raises(ValueError, match="header"):
         process_csv(str(file), str(tmp_path / "out.csv"))
+
+
+def test_intermediate_and_cumulative_overflow_rejected():
+    with pytest.raises(DoseInputError, match="Calculated DLP"):
+        calculate_ct_dose(ctdi_vol_mgy=1e308, scan_length_cm=10, dlp_mgy_cm=20)
+    with pytest.raises(DoseInputError, match="Cumulative DLP"):
+        summarize_dose_exams([calculate_ct_dose(dlp_mgy_cm=1e308)] * 2)
+    with pytest.raises(DoseInputError, match="Cumulative effective"):
+        summarize_dose_exams([calculate_ct_dose(dlp_mgy_cm=1e200, k_msv_per_mgy_cm=1e108)] * 2)
+
+
+def test_cli_invalid_dose_returns_nonzero(capsys):
+    assert main(["single", "--ctdi-vol", "10"]) == 2
+    assert "Error:" in capsys.readouterr().err
+    assert main(["single", "--json", "{bad"]) == 2
+    assert main(["single", "--json", "[]"]) == 2
+
+
+def test_python_csv_export_neutralizes_formulas(tmp_path):
+    inp, out = tmp_path / "input.csv", tmp_path / "result.csv"
+    inp.write_text("protocol,dlp_mgy_cm\n=2+3,200\n", encoding="utf8")
+    rows = process_csv(str(inp), str(out))
+    assert rows[0]["protocol"] == "=2+3"  # The in-memory record is unchanged.
+    with out.open(newline="", encoding="utf8") as file:
+        record = next(csv.DictReader(file))
+    assert record["protocol"] == "'=2+3"
+    assert float(record["dlp_mgy_cm"]) == 200.0

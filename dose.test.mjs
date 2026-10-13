@@ -52,3 +52,12 @@ test('CSV export neutralizes spreadsheet formula text', () => {
   assert.ok(csv.includes('"\'=HYPERLINK(""bad"")"'));
   assert.ok(csv.includes('"10"'));
 });
+
+
+test('reject intermediate and cumulative dose overflow', () => {
+  assert.throws(() => calculateDose({ ctdi: 1e308, length: 10, dlp: 20 }), /Calculated DLP/);
+  assert.throws(() => summarize([{ dose: calculateDose({ dlp: 1e308 }) },
+                                 { dose: calculateDose({ dlp: 1e308 }) }]), /Cumulative DLP/);
+  assert.throws(() => summarize([{ dose: calculateDose({ dlp: 1e200, k: 1e108 }) },
+                                 { dose: calculateDose({ dlp: 1e200, k: 1e108 }) }]), /Cumulative effective/);
+});
